@@ -1,39 +1,49 @@
 package crawler
 
 import (
+	"bytes"
+	"log"
+	"os"
 	"testing"
 
 	"github.com/gocolly/colly"
 )
 
-// TestCrawlerUserAgent tests that the Crawler function sets the correct UserAgent on the
-// colly.Collector object it creates.
 func TestCrawlerUserAgent(t *testing.T) {
-	crawler := colly.NewCollector()
+	var agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Edg/91.0.864.59"
 
-	// Check that the UserAgent of the colly.Collector object is set to the correct value
-	if got, want := crawler.UserAgent, "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/91.0.4472.114 Safari/537.36"; got != want {
-		t.Errorf("crawler.UserAgent = %q, want %q", got, want)
-	}
+	// crawler := colly.NewCollector()
+	c := Crawler()
+
+	c.OnResponse(func(h *colly.Response) {
+		// Check that the UserAgent of the colly.Collector object is set to the correct value
+		// "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36 Edg/91.0.864.59"
+
+		if got, want := c.UserAgent, agent; got != want {
+			t.Fatalf("c.UserAgent = %q, want %q", got, want)
+		}
+	})
+
+	c.Visit("https://www.eworldtrade.com/c/page=1108")
+
 }
 
-// TestCrawlerURLs tests that the Crawler function visits the correct URLs.
 func TestCrawlerURLs(t *testing.T) {
-	crawler := colly.NewCollector()
+	c := crawler.Crawler()
 
 	// Set a flag to indicate whether the expected URLs have been visited
 	visited := false
 
 	// Set a callback to check the visited URLs
-	crawler.OnRequest(func(r *colly.Request) {
-		if r.URL.String() == "https://www.eworldtrade.com/c/?page=1" || r.URL.String() == "https://www.eworldtrade.com/c/?page=2" {
+	c.OnRequest(func(h *colly.Request) {
+		if h.URL.String() == "https://www.eworldtrade.com/c/?page=1" || h.URL.String() == "https://www.eworldtrade.com/c/?page=2" {
 			visited = true
 		}
 	})
 
 	// Visit some test URLs
-	crawler.Visit("https://www.eworldtrade.com/c/?page=1")
-	crawler.Visit("https://www.eworldtrade.com/c/?page=2")
+	c.Visit("https://www.eworldtrade.com/c/?page=1")
+	c.Visit("https://www.eworldtrade.com/c/?page=2")
 
 	// Check that the expected URLs have been visited
 	if !visited {
@@ -41,16 +51,14 @@ func TestCrawlerURLs(t *testing.T) {
 	}
 }
 
-// TestCrawlerCompanyURLs tests that the Crawler function extracts the correct company URLs
-// from the visited pages.
 func TestCrawlerCompanyURLs(t *testing.T) {
-	crawler := colly.NewCollector()
+	c := Crawler()
 
 	// Set a flag to indicate whether the expected company URLs have been extracted
 	extracted := false
 
 	// Set a callback to extract the company URLs
-	crawler.OnHTML("div.row > div.col-lg-8", func(h *colly.HTMLElement) {
+	c.OnHTML("div.row > div.col-lg-8", func(h *colly.HTMLElement) {
 		link := h.ChildAttr("a", "href")
 
 		// Check if the extracted company URL is correct
@@ -60,70 +68,101 @@ func TestCrawlerCompanyURLs(t *testing.T) {
 	})
 
 	// Visit some test pages
-	crawler.Visit("https://www.eworldtrade.com/c/?page=1")
-	crawler.Visit("https://www.eworldtrade.com/c/?page=2")
+	c.Visit("https://www.eworldtrade.com/c/?page=1")
+	c.Visit("https://www.eworldtrade.com/c/?page=2")
 
 	// Check that the expected company URLs have been extracted
 	if !extracted {
 		t.Error("Expected company URLs were not extracted")
 	}
+}
+
+func TestScrapeEmails(t *testing.T) {
+	c := Crawler()
 
 	// Set a flag to indicate whether the expected emails have been scraped
-scraped := false
+	scraped := false
 
-// Set a callback to scrape the emails from the company URLs
-crawler.OnHTML("div.row > div.col-lg-8", func(h *colly.HTMLElement) {
-	companyUrl := h.ChildAttr("a", "href")
+	// Set a callback to scrape the emails from the company URLs
+	c.OnHTML("div.row > div.col-lg-8", func(h *colly.HTMLElement) {
+		companyURL := h.ChildAttr("a", "href")
 
-	// Check if the scraped email is correct
-	if companyUrl == "https://www.eworldtrade.com/c/abc-company" && scrapeEmails([]string{companyUrl})[0] == "abc@company.com" {
-		scraped = true
-	}
-	if companyUrl == "https://www.eworldtrade.com/c/xyz-company" && scrapeEmails([]string{companyUrl})[0] == "xyz@company.com" {
-		scraped = true
-	}
-})
-
-// Visit some test pages
-crawler.Visit("https://www.eworldtrade.com/c/?page=1")
-crawler.Visit("https://www.eworldtrade.com/c/?page=2")
-
-// Check that the expected emails have been scraped
-if !scraped {
-	t.Error("Expected emails were not scraped")
-}
-}
-
-
-// TestScrapeEmails tests that the scrapeEmails function correctly extracts email addresses
-// from the given list of URLs.
-func TestScrapeEmails(t *testing.T) {
-	urls := []string{
-		"https://www.eworldtrade.com/c/abc-company",
-		"https://www.eworldtrade.com/c/xyz-company",
-	}
-
-	emails := scrapeEmails(urls)
-	
-
-		// Check if the extracted emails are correct
-		if len(emails) != 2 || emails[0] != "abc@company.com" || emails[1] != "xyz@company.com" {
-			t.Errorf("emails = %v, want [abc@company.com, xyz@company.com]", emails)
+		// Check if the scraped email is correct
+		if companyURL == "https://www.eworldtrade.com/c/abc-company" && scrapeEmails([]string{companyURL})[0] == "abc@company.com" {
+			scraped = true
 		}
+		if companyURL == "https://www.eworldtrade.com/c/xyz-company" && scrapeEmails([]string{companyURL})[0] == "xyz@company.com" {
+			scraped = true
+		}
+	})
 
+	// Visit some test pages
+	c.Visit("https://www.eworldtrade.com/c/?page=1")
+	c.Visit("https://www.eworldtrade.com/c/?page=2")
 
-	/*
-	// Check that the correct number of emails is extracted
-	if got, want := len(emails), 2; got != want {
-		t.Fatalf("len(emails) = %d, want %d", got, want)
+	// Check that the expected emails have been scraped
+	if !scraped {
+		t.Error("Expected emails were not scraped")
 	}
 
-	// Check that the extracted email addresses are correct
-	if got, want := emails[0], "abc@company.com"; got != want {
-		t.Errorf("emails[0] = %q, want %q", got, want)
+}
+
+// TestShowProgress tests that the showProgress function prints the correct progress bar.
+func TestShowProgress(t *testing.T) {
+	// Capture the output of the showProgress function
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stdout)
+
+	// Test the showProgress function with different total values
+	showProgress(50)
+	if got, want := buf.String(), "\r[==================================================] 100%"; got != want {
+		t.Errorf("showProgress(50) = %q, want %q", got, want)
 	}
-	if got, want := emails[1], "xyz@company.com"; got != want {
-		t.Errorf("emails[1] = %q, want %q", got, want)
+
+	buf.Reset()
+	showProgress(75)
+	if got, want := buf.String(), "\r[==============================================   ] 75%"; got != want {
+		t.Errorf("showProgress(75) = %q, want %q", got, want)
 	}
-	*/
+
+	buf.Reset()
+	showProgress(0)
+	if got, want := buf.String(), "\r[                                                  ] 0%"; got != want {
+		t.Errorf("showProgress(0) = %q, want %q", got, want)
+	}
+
+}
+
+// TestRemoveDuplicates tests that the removeDuplicates function returns a slice without duplicate values.
+func TestRemoveDuplicates(t *testing.T) {
+	// Test the removeDuplicates function with a slice of strings
+	slice := []string{"abc@example.com", "xyz@example.com", "abc@example.com"}
+	if got, want := removeDuplicates(slice), []string{"abc@example.com", "xyz@example.com"}; !equal(got, want) {
+		t.Errorf("removeDuplicates(%q) = %q, want %q", slice, got, want)
+	}
+
+	// Test the removeDuplicates function with a slice of integers
+	slice = []string{"1", "2", "2"}
+	if got, want := removeDuplicates(slice), []string{"1", "2"}; !equal(got, want) {
+		t.Errorf("removeDuplicates(%q) = %q, want %q", slice, got, want)
+	}
+
+	// Test the removeDuplicates function with an empty slice
+	if got, want := removeDuplicates([]string{}), []string{}; !equal(got, want) {
+		t.Errorf("removeDuplicates(%q) = %q, want %q", []string{}, got, want)
+	}
+}
+
+// equal checks if two slices are equal
+func equal(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, v := range a {
+		if v != b[i] {
+			return false
+		}
+	}
+	return true
 }
